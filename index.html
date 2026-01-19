@@ -1,1 +1,414 @@
-version #2
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thailand Electricity Dashboard</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        :root {
+            --primary-bg: #f4f6f9;
+            --card-bg: #ffffff;
+            --text-primary: #2c3e50;
+        }
+        body { background-color: var(--primary-bg); color: var(--text-primary); font-family: 'Segoe UI', sans-serif; }
+        .dashboard-header { background: #fff; padding: 1.5rem 0; margin-bottom: 2rem; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        .kpi-card { background: var(--card-bg); border-radius: 12px; padding: 1.5rem; height: 100%; box-shadow: 0 4px 6px rgba(0,0,0,0.02); transition: transform 0.2s; border-left: 5px solid transparent; }
+        .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.1); }
+        .kpi-title { font-size: 0.85rem; text-transform: uppercase; color: #6c757d; font-weight: 600; letter-spacing: 0.5px; }
+        .kpi-value { font-size: 2rem; font-weight: 700; margin: 10px 0; color: #2c3e50; }
+        .chart-box { background: #fff; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.02); position: relative; height: 400px; }
+        .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+        .loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.9); z-index: 9999; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+    </style>
+</head>
+<body>
+
+    <div id="loading" class="loading-overlay">
+        <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+        <h5 class="text-muted">Loading Data...</h5>
+        <small class="text-danger mt-2 d-none" id="error-msg">Error: Please run via a local server (CORS)</small>
+    </div>
+
+    <div class="dashboard-header sticky-top">
+        <div class="container-fluid px-4">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <h3 class="fw-bold mb-0"><i class="bi bi-lightning-charge-fill text-warning"></i> Thai Electricity Dashboard</h3>
+                    <p class="text-muted mb-0">Analysis of Provincial Usage & Users</p>
+                </div>
+                <div class="col-md-6 mt-3 mt-md-0">
+                    <form class="row g-2 justify-content-md-end">
+                        <div class="col-auto">
+                            <select id="yearSelect" class="form-select fw-bold text-primary border-primary">
+                                </select>
+                        </div>
+                        <div class="col-auto">
+                            <select id="provinceSelect" class="form-select">
+                                <option value="All">All Provinces</option>
+                                </select>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-fluid px-4 mb-4">
+        <div class="row g-4">
+            <div class="col-xl-3 col-md-6">
+                <div class="kpi-card" style="border-left-color: #4e73df;">
+                    <div class="kpi-title">Total Usage</div>
+                    <div class="kpi-value" id="kpi-usage">0</div>
+                    <div class="d-flex align-items-center text-muted">
+                        <i class="bi bi-battery-charging me-2"></i> Gigawatt Hours (GWh)
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="kpi-card" style="border-left-color: #1cc88a;">
+                    <div class="kpi-title">Total Users</div>
+                    <div class="kpi-value" id="kpi-users">0</div>
+                    <div class="d-flex align-items-center text-muted">
+                        <i class="bi bi-people-fill me-2"></i> Household & Business
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="kpi-card" style="border-left-color: #36b9cc;">
+                    <div class="kpi-title">Avg Usage per User</div>
+                    <div class="kpi-value" id="kpi-avg">0</div>
+                    <div class="d-flex align-items-center text-muted">
+                        <i class="bi bi-speedometer2 me-2"></i> kWh / User
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-md-6">
+                <div class="kpi-card" style="border-left-color: #f6c23e;">
+                    <div class="kpi-title">EV Charging Points</div>
+                    <div class="kpi-value" id="kpi-ev">0</div>
+                    <div class="d-flex align-items-center text-muted">
+                        <i class="bi bi-ev-station-fill me-2"></i> Recorded Stations
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container-fluid px-4">
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="chart-box">
+                    <h5 class="fw-bold text-secondary">Consumption by Sector (kWh)</h5>
+                    <canvas id="usageChart"></canvas>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="chart-box">
+                    <h5 class="fw-bold text-secondary">User Distribution</h5>
+                    <canvas id="usersChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-12">
+                <div class="chart-box">
+                    <h5 class="fw-bold text-secondary">Top 10 Provinces by Total Consumption</h5>
+                    <canvas id="topProvChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-5">
+            <div class="col-12">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                        <h5 class="m-0 fw-bold">Detailed Data View</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive" style="max-height: 400px;">
+                            <table class="table table-hover table-striped mb-0" id="dataTable">
+                                <thead class="table-dark position-sticky top-0">
+                                    <tr>
+                                        <th>Year</th>
+                                        <th>Province</th>
+                                        <th class="text-end">Total Users</th>
+                                        <th class="text-end">Residential (kWh)</th>
+                                        <th class="text-end">Business (kWh)</th>
+                                        <th class="text-end">Total (kWh)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global State
+        let rawUsersData = [];
+        let rawUsageData = [];
+        let charts = {};
+
+        // 1. Fetch Data
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // Fetch both JSON files concurrently
+                const [usersRes, usageRes] = await Promise.all([
+                    fetch('electricity_users_en.json'),
+                    fetch('electricity_usages_en.json')
+                ]);
+
+                if (!usersRes.ok || !usageRes.ok) throw new Error("File not found or CORS error");
+
+                rawUsersData = await usersRes.json();
+                const usageJson = await usageRes.json();
+                
+                // Handle structure if it's wrapped in "Sheet1" or direct array
+                rawUsageData = Array.isArray(usageJson) ? usageJson : (usageJson.Sheet1 || []);
+
+                initializeDashboard();
+                document.getElementById('loading').classList.add('d-none'); // Hide loader
+
+            } catch (error) {
+                console.error("Data Load Error:", error);
+                document.querySelector('.spinner-border').classList.add('d-none');
+                document.getElementById('error-msg').classList.remove('d-none');
+                document.getElementById('error-msg').innerText = "Error loading JSON files. Ensure files exist and you are using a Local Server (not double-clicking the file).";
+            }
+        });
+
+        // 2. Initialize Logic
+        function initializeDashboard() {
+            populateFilters();
+            setupEventListeners();
+            updateDashboard();
+        }
+
+        function populateFilters() {
+            // Get unique Years
+            const years = [...new Set(rawUsersData.map(d => d.year))].sort((a,b) => b-a);
+            const yearSelect = document.getElementById('yearSelect');
+            years.forEach(y => {
+                const opt = document.createElement('option');
+                opt.value = y;
+                opt.text = `Year: ${y}`;
+                yearSelect.appendChild(opt);
+            });
+
+            // Get unique Provinces
+            const provinces = [...new Set(rawUsersData.map(d => d.province_name))].sort();
+            const provSelect = document.getElementById('provinceSelect');
+            provinces.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.text = p;
+                provSelect.appendChild(opt);
+            });
+        }
+
+        function setupEventListeners() {
+            document.getElementById('yearSelect').addEventListener('change', updateDashboard);
+            document.getElementById('provinceSelect').addEventListener('change', updateDashboard);
+        }
+
+        // 3. Core Logic
+        function updateDashboard() {
+            const selectedYear = parseInt(document.getElementById('yearSelect').value);
+            const selectedProv = document.getElementById('provinceSelect').value;
+
+            // Filter Data
+            const filteredUsers = rawUsersData.filter(d => 
+                d.year === selectedYear && (selectedProv === "All" || d.province_name === selectedProv)
+            );
+            const filteredUsage = rawUsageData.filter(d => 
+                d.year === selectedYear && (selectedProv === "All" || d.province_name === selectedProv)
+            );
+
+            // Calculate Aggregates
+            const agg = calculateAggregates(filteredUsers, filteredUsage);
+
+            // Update UI
+            updateKPIs(agg);
+            renderUsageChart(agg);
+            renderUsersChart(agg);
+            renderTopProvinces(filteredUsage);
+            updateTable(filteredUsers, filteredUsage);
+        }
+
+        function calculateAggregates(users, usage) {
+            let res = {
+                usersTotal: 0,
+                usersResidential: 0,
+                usersBusiness: 0, // Sum of small, med, large
+                usersEV: 0,
+                
+                usageTotal: 0,
+                usageResidential: 0,
+                usageBusiness: 0, // Sum of small, med, large, specialized
+                usageGov: 0,
+                usageOther: 0
+            };
+
+            users.forEach(u => {
+                res.usersResidential += u.residential_count || 0;
+                res.usersBusiness += (u.small_business_count + u.medium_business_count + u.large_business_count) || 0;
+                res.usersEV += u.ev_charging_count || 0;
+                // Total users = sum of residential + business (simplified for chart)
+                res.usersTotal += u.residential_count + u.small_business_count + u.medium_business_count + u.large_business_count;
+            });
+
+            usage.forEach(u => {
+                const businessSum = (u.small_business_kwh || 0) + (u.medium_business_kwh || 0) + (u.large_business_kwh || 0) + (u.specialized_business_kwh || 0);
+                const otherSum = (u.public_electricity_kwh || 0) + (u.water_pumping_kwh || 0) + (u.temporary_electricity_kwh || 0);
+
+                res.usageResidential += u.residential_kwh || 0;
+                res.usageBusiness += businessSum;
+                res.usageGov += u.government_state_enterprise_kwh || 0;
+                res.usageOther += otherSum;
+                
+                // Total calculation to match individual sums
+                res.usageTotal += (u.residential_kwh || 0) + businessSum + (u.government_state_enterprise_kwh || 0) + otherSum;
+            });
+
+            return res;
+        }
+
+        function updateKPIs(data) {
+            // Usage in GWh
+            document.getElementById('kpi-usage').innerText = (data.usageTotal / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 });
+            
+            // Users
+            document.getElementById('kpi-users').innerText = data.usersTotal.toLocaleString();
+            
+            // Avg
+            const avg = data.usersTotal > 0 ? (data.usageTotal / data.usersTotal) : 0;
+            document.getElementById('kpi-avg').innerText = avg.toLocaleString(undefined, { maximumFractionDigits: 0 });
+            
+            // EV
+            document.getElementById('kpi-ev').innerText = data.usersEV.toLocaleString();
+        }
+
+        function updateTable(users, usage) {
+            const tbody = document.querySelector('#dataTable tbody');
+            tbody.innerHTML = '';
+            
+            // Map usage by province for easy lookup
+            const usageMap = new Map();
+            usage.forEach(u => usageMap.set(u.province_name, u));
+
+            users.forEach(u => {
+                const use = usageMap.get(u.province_name) || {};
+                
+                const totalUsers = u.residential_count + u.small_business_count + u.medium_business_count + u.large_business_count;
+                
+                const totalBusinessUsage = (use.small_business_kwh||0) + (use.medium_business_kwh||0) + (use.large_business_kwh||0);
+                const totalUsage = (use.residential_kwh||0) + totalBusinessUsage + (use.government_state_enterprise_kwh||0) + (use.specialized_business_kwh||0);
+
+                const row = `
+                    <tr>
+                        <td>${u.year}</td>
+                        <td class="fw-bold">${u.province_name}</td>
+                        <td class="text-end">${totalUsers.toLocaleString()}</td>
+                        <td class="text-end">${(use.residential_kwh || 0).toLocaleString()}</td>
+                        <td class="text-end">${totalBusinessUsage.toLocaleString()}</td>
+                        <td class="text-end text-primary fw-bold">${totalUsage.toLocaleString()}</td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
+
+        // 4. Chart Rendering
+        function renderUsageChart(data) {
+            const ctx = document.getElementById('usageChart').getContext('2d');
+            if (charts.usage) charts.usage.destroy();
+
+            charts.usage = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['Residential', 'Business', 'Government', 'Other'],
+                    datasets: [{
+                        data: [data.usageResidential, data.usageBusiness, data.usageGov, data.usageOther],
+                        backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc', '#f6c23e'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right' } }
+                }
+            });
+        }
+
+        function renderUsersChart(data) {
+            const ctx = document.getElementById('usersChart').getContext('2d');
+            if (charts.users) charts.users.destroy();
+
+            charts.users = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Residential', 'Business', 'EV Stations'],
+                    datasets: [{
+                        data: [data.usersResidential, data.usersBusiness, data.usersEV],
+                        backgroundColor: ['#4e73df', '#e74a3b', '#f6c23e'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right' } }
+                }
+            });
+        }
+
+        function renderTopProvinces(usageData) {
+            // Sort by total usage descending
+            const sorted = [...usageData].sort((a, b) => {
+                const totalA = (a.residential_kwh||0) + (a.small_business_kwh||0) + (a.medium_business_kwh||0) + (a.large_business_kwh||0);
+                const totalB = (b.residential_kwh||0) + (b.small_business_kwh||0) + (b.medium_business_kwh||0) + (b.large_business_kwh||0);
+                return totalB - totalA;
+            }).slice(0, 10);
+
+            const labels = sorted.map(d => d.province_name);
+            const values = sorted.map(d => {
+                return (d.residential_kwh||0) + (d.small_business_kwh||0) + (d.medium_business_kwh||0) + (d.large_business_kwh||0);
+            });
+
+            const ctx = document.getElementById('topProvChart').getContext('2d');
+            if (charts.top) charts.top.destroy();
+
+            charts.top = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Total Consumption (kWh)',
+                        data: values,
+                        backgroundColor: '#4e73df',
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
